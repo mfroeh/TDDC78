@@ -1,182 +1,134 @@
-/*
-File: blurfilter.c
-Implementation of blurfilter function.
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "blurfilter.h"
 #include "ppmio.h"
 #include <pthread.h>
-#include <stdlib.h>
 
-#define PTHREAD_COUNT 64 
+#define PTHREAD_COUNT 64
+
 pthread_barrier_t barrier;
 
-pixel* pix(pixel* image, const int xx, const int yy, const int xsize)
+typedef struct
 {
-	int off = xsize*yy + xx;
+	int xsize, ysize;
+	int radius;
+	pixel *src, *dst;
+	double const *weights;
+	int rank, num_threads;
+} thread_args;
+
+pixel *pix(pixel *image, const int xx, const int yy, const int xsize)
+{
+	int off = xsize * yy + xx;
 	return (image + off);
 }
 
-typedef struct {
-	double const *w;
-	int xsize;
-	int ysize;
-	int radius;
-	pixel* src;
-	pixel* dst;
-} global_args;
-
-typedef struct {
-	int index;
-	global_args *global;
-} dim_args;
-
-typedef struct {
-	int thread_index;
-	dim_args dim;
-} task_args;
-
-void *compute_row(void* buf) {
-	dim_args args = *(dim_args*)(buf);
-	global_args *global = args.global;
-	int y = args.index;
-
-	for (int x=0; x < global->xsize; ++x) {
-		double r = 0,g = 0 ,b = 0,n = 0;
-
-		for (int wi=-global->radius; wi <= global->radius; wi++)
-		{
-			double wc = global->w[abs(wi)];
-			int x2 = x + wi;
-			if (x2 >= 0 && x2 < global->xsize)
-			{
-				r += wc * pix(global->src, x2, y, global->xsize)->r;
-				g += wc * pix(global->src, x2, y, global->xsize)->g;
-				b += wc * pix(global->src, x2, y, global->xsize)->b;
-				n += wc;
-			}
-		}
-		pix(global->dst,x,y, global->xsize)->r = r/n;
-		pix(global->dst,x,y, global->xsize)->g = g/n;
-		pix(global->dst,x,y, global->xsize)->b = b/n;
-	}
-
-}
-
-void* compute_rows(void* t_args) {
-	
-	task_args args = *(task_args*)t_args;	
-
-	int rows_per_thread = args.dim.global->ysize / PTHREAD_COUNT;
-	int starting_row = args.thread_index*rows_per_thread;
-	int last_row = starting_row + rows_per_thread;
-	if(args.thread_index == PTHREAD_COUNT-1) {
-		int remaining_rows = args.dim.global->ysize % PTHREAD_COUNT;
-		last_row += remaining_rows;
-	}
-	
-	for (int y=starting_row; y < last_row; ++y) {
-		args.dim.index = y;
-		compute_row(&args.dim);
-	}
-	
-	pthread_barrier_wait(&barrier);
-	args.dim.global->src = dst;
-	args.dim.global->dst = src;
-	compute_cols(
-}
-
-void *compute_col(void* buf) {
-	dim_args args = *(dim_args*)(buf);
-	global_args *global = args.global;
-	int x = args.index;
-
-	for (int y=0; y < global->ysize; ++y) {
-		double r = 0,g = 0 ,b = 0,n = 0;
-		for (int wi=-global->radius; wi <= global->radius; wi++)
-		{
-			double wc = global->w[abs(wi)];
-
-			int y2 = y + wi;
-			if (y2 >= 0 && y2 < global->ysize)
-			{
-				r += wc * pix(global->src, x, y2, global->xsize)->r;
-				g += wc * pix(global->src, x, y2, global->xsize)->g;
-				b += wc * pix(global->src, x, y2, global->xsize)->b;
-				n += wc;
-			}
-		}
-		pix(global->dst,x,y, global->xsize)->r = r/n;
-		pix(global->dst,x,y, global->xsize)->g = g/n;
-		pix(global->dst,x,y, global->xsize)->b = b/n;
-	}
-
-}
-
-void* compute_cols(void* t_args) {
-	
-	task_args args = *(task_args*)t_args;	
-
-	int cols_per_thread = args.dim.global->xsize / PTHREAD_COUNT;
-	int starting_col = args.thread_index*cols_per_thread;
-	int last_col = starting_col + cols_per_thread;
-	if(args.thread_index == PTHREAD_COUNT-1) {
-		int remaining_cols = args.dim.global->xsize % PTHREAD_COUNT;
-		last_col += remaining_cols;
-	}
-	
-	for (int x=starting_col; x < last_col; ++x) {
-		args.dim.index = x;
-		compute_col(&args.dim);
-	}
-	
-	free(t_args);
-}
-
-void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, const double *w)
+void compute_row(int y, thread_args *args)
 {
-	double r, g, b, n, wc;
-	pixel *dst = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
+	for (int x = 0; x < args->xsize; ++x)
+	{
+		double r = 0, g = 0, b = 0, n = 0;
+		for (int wi = -args->radius; wi <= args->radius; wi++)
+		{
+			double wc = args->weights[abs(wi)];
+			int x2 = x + wi;
+			if (x2 >= 0 && x2 < args->xsize)
+			{
+				r += wc * pix(args->src, x2, y, args->xsize)->r;
+				g += wc * pix(args->src, x2, y, args->xsize)->g;
+				b += wc * pix(args->src, x2, y, args->xsize)->b;
+				n += wc;
+			}
+		}
 
-	global_args *global = malloc(sizeof(global_args));
-	global->xsize = xsize;
-	global->ysize = ysize;
-	global->src = src;
-	global->dst = dst;
-	global->radius = radius;
-	global->w = w;
+		pix(args->dst, x, y, args->xsize)->r = r / n;
+		pix(args->dst, x, y, args->xsize)->g = g / n;
+		pix(args->dst, x, y, args->xsize)->b = b / n;
+	}
+}
+
+void compute_col(int x, thread_args *args)
+{
+	for (int y = 0; y < args->ysize; ++y)
+	{
+
+		double r = 0, g = 0, b = 0, n = 0;
+		for (int wi = -args->radius; wi <= args->radius; wi++)
+		{
+			double wc = args->weights[abs(wi)];
+			int y2 = y + wi;
+			if (y2 >= 0 && y2 < args->ysize)
+			{
+				r += wc * pix(args->dst, x, y2, args->xsize)->r;
+				g += wc * pix(args->dst, x, y2, args->xsize)->g;
+				b += wc * pix(args->dst, x, y2, args->xsize)->b;
+				n += wc;
+			}
+		}
+
+		pix(args->src, x, y, args->xsize)->r = r / n;
+		pix(args->src, x, y, args->xsize)->g = g / n;
+		pix(args->src, x, y, args->xsize)->b = b / n;
+	}
+}
+
+void *work(void *arg)
+{
+	thread_args args = *(thread_args *)arg;
+
+	int thread_rows = args.ysize / args.num_threads;
+	int thread_cols = args.xsize / args.num_threads;
+
+	int start_row = args.rank * thread_rows;
+	int start_col = args.rank * thread_cols;
+
+	int end_row = start_row + thread_rows;
+	int end_col = start_col + thread_cols;
+
+	// Last thread does the remaining work
+	if (args.rank == args.num_threads - 1)
+	{
+		end_row += args.ysize % args.num_threads;
+		end_col += args.xsize % args.num_threads;
+	}
+
+	// Compute the weighted row-wise averages for pixels of the assigned rows
+	for (int y = start_row; y < end_row; ++y)
+		compute_row(y, &args);
+
+	// Wait for all the row averages to be computed
+	pthread_barrier_wait(&barrier);
+
+	// Compute the weighted column-wise averages for pixels of the assigned columns
+	for (int x = start_col; x < end_col; ++x)
+		compute_col(x, &args);
+}
+
+void blurfilter(const int xsize, const int ysize, pixel *src, const int radius, const double *w)
+{
+	pthread_barrier_init(&barrier, NULL, PTHREAD_COUNT);
+
+	pixel *dst = (pixel *)malloc(sizeof(pixel) * MAX_PIXELS);
 
 	pthread_t threads[PTHREAD_COUNT];
-
-	for (int thread=0; thread<PTHREAD_COUNT; thread++)
+	for (int t = 0; t < PTHREAD_COUNT; ++t)
 	{
-		task_args *args = malloc(sizeof(task_args));
-		args->dim.global = global;
-		args->thread_index = thread;
-		pthread_create(&threads[thread], 0, compute_rows, args);
+		thread_args *args = malloc(sizeof(thread_args));
+		args->xsize = xsize;
+		args->ysize = ysize;
+		args->radius = radius;
+		args->weights = w;
+		args->src = src;
+		args->dst = dst;
+		args->rank = t;
+		args->num_threads = PTHREAD_COUNT;
+		pthread_create(&threads[t], NULL, work, args);
 	}
 
-	for (int thread=0; thread < PTHREAD_COUNT; ++thread) {
-		pthread_join(threads[thread], NULL);
-	}
+	for (int t = 0; t < PTHREAD_COUNT; ++t)
+		pthread_join(threads[t], NULL);
 
-	global->src = dst;
-	global->dst = src;
-
-	for (int thread=0; thread<PTHREAD_COUNT; thread++)
-	{
-		task_args *args = malloc(sizeof(task_args));
-		args->dim.global = global;
-		args->thread_index = thread;
-		pthread_create(&threads[thread], 0, compute_cols, args);
-	}
-
-
-	for (int thread=0; thread < PTHREAD_COUNT; ++thread) {
-		pthread_join(threads[thread], NULL);
-	}
+	pthread_barrier_destroy(&barrier);
 
 	free(dst);
 }
