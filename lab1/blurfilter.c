@@ -10,6 +10,9 @@ Implementation of blurfilter function.
 #include <pthread.h>
 #include <stdlib.h>
 
+#define PTHREAD_COUNT 64 
+pthread_barrier_t barrier;
+
 pixel* pix(pixel* image, const int xx, const int yy, const int xsize)
 {
 	int off = xsize*yy + xx;
@@ -28,11 +31,15 @@ typedef struct {
 typedef struct {
 	int index;
 	global_args *global;
+} dim_args;
+
+typedef struct {
+	int thread_index;
+	dim_args dim;
 } task_args;
 
-
 void *compute_row(void* buf) {
-	task_args args = *(task_args*)(buf);
+	dim_args args = *(dim_args*)(buf);
 	global_args *global = args.global;
 	int y = args.index;
 
@@ -56,11 +63,33 @@ void *compute_row(void* buf) {
 		pix(global->dst,x,y, global->xsize)->b = b/n;
 	}
 
-	free(buf);
+}
+
+void* compute_rows(void* t_args) {
+	
+	task_args args = *(task_args*)t_args;	
+
+	int rows_per_thread = args.dim.global->ysize / PTHREAD_COUNT;
+	int starting_row = args.thread_index*rows_per_thread;
+	int last_row = starting_row + rows_per_thread;
+	if(args.thread_index == PTHREAD_COUNT-1) {
+		int remaining_rows = args.dim.global->ysize % PTHREAD_COUNT;
+		last_row += remaining_rows;
+	}
+	
+	for (int y=starting_row; y < last_row; ++y) {
+		args.dim.index = y;
+		compute_row(&args.dim);
+	}
+	
+	pthread_barrier_wait(&barrier);
+	args.dim.global->src = dst;
+	args.dim.global->dst = src;
+	compute_cols(
 }
 
 void *compute_col(void* buf) {
-	task_args args = *(task_args*)(buf);
+	dim_args args = *(dim_args*)(buf);
 	global_args *global = args.global;
 	int x = args.index;
 
@@ -84,8 +113,28 @@ void *compute_col(void* buf) {
 		pix(global->dst,x,y, global->xsize)->b = b/n;
 	}
 
-	free(buf);
 }
+
+void* compute_cols(void* t_args) {
+	
+	task_args args = *(task_args*)t_args;	
+
+	int cols_per_thread = args.dim.global->xsize / PTHREAD_COUNT;
+	int starting_col = args.thread_index*cols_per_thread;
+	int last_col = starting_col + cols_per_thread;
+	if(args.thread_index == PTHREAD_COUNT-1) {
+		int remaining_cols = args.dim.global->xsize % PTHREAD_COUNT;
+		last_col += remaining_cols;
+	}
+	
+	for (int x=starting_col; x < last_col; ++x) {
+		args.dim.index = x;
+		compute_col(&args.dim);
+	}
+	
+	free(t_args);
+}
+
 void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, const double *w)
 {
 	double r, g, b, n, wc;
@@ -99,35 +148,35 @@ void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, 
 	global->radius = radius;
 	global->w = w;
 
-	pthread_t *threads = malloc(sizeof(pthread_t) * ysize);
-	for (int y=0; y<ysize; y++)
+	pthread_t threads[PTHREAD_COUNT];
+
+	for (int thread=0; thread<PTHREAD_COUNT; thread++)
 	{
 		task_args *args = malloc(sizeof(task_args));
-		args->global = global;
-		args->index = y;
-		pthread_create(&threads[y], 0, compute_row, args);
+		args->dim.global = global;
+		args->thread_index = thread;
+		pthread_create(&threads[thread], 0, compute_rows, args);
 	}
 
-	for (int y=0; y < ysize; ++y) {
-		pthread_join(threads[y], NULL);
+	for (int thread=0; thread < PTHREAD_COUNT; ++thread) {
+		pthread_join(threads[thread], NULL);
 	}
-	free(threads);
-
-	threads = malloc(sizeof(pthread_t) * xsize);
 
 	global->src = dst;
 	global->dst = src;
-	for (int x=0; x < xsize; ++x) {
+
+	for (int thread=0; thread<PTHREAD_COUNT; thread++)
+	{
 		task_args *args = malloc(sizeof(task_args));
-		args->global = global;
-		args->index = x;
-		pthread_create(&threads[x], 0, compute_col, args);
+		args->dim.global = global;
+		args->thread_index = thread;
+		pthread_create(&threads[thread], 0, compute_cols, args);
 	}
 
-	for (int x=0; x < xsize; ++x) {
-		pthread_join(threads[x], NULL);
+
+	for (int thread=0; thread < PTHREAD_COUNT; ++thread) {
+		pthread_join(threads[thread], NULL);
 	}
-	free(threads);
 
 	free(dst);
 }
