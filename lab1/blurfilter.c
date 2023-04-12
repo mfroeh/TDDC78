@@ -4,8 +4,6 @@
 #include "ppmio.h"
 #include <pthread.h>
 
-#define PTHREAD_COUNT 64
-
 pthread_barrier_t barrier;
 
 typedef struct
@@ -104,14 +102,14 @@ void *work(void *arg)
 		compute_col(x, &args);
 }
 
-void blurfilter(const int xsize, const int ysize, pixel *src, const int radius, const double *w)
+void blurfilter(const int xsize, const int ysize, pixel *src, const int radius, const double *w, const int thread_count)
 {
-	pthread_barrier_init(&barrier, NULL, PTHREAD_COUNT);
+	pthread_barrier_init(&barrier, NULL, thread_count);
 
 	pixel *dst = (pixel *)malloc(sizeof(pixel) * MAX_PIXELS);
 
-	pthread_t threads[PTHREAD_COUNT];
-	for (int t = 0; t < PTHREAD_COUNT; ++t)
+	pthread_t *threads = malloc(sizeof(pthread_t) * thread_count);
+	for (int t = 0; t < thread_count; ++t)
 	{
 		thread_args *args = malloc(sizeof(thread_args));
 		args->xsize = xsize;
@@ -121,11 +119,11 @@ void blurfilter(const int xsize, const int ysize, pixel *src, const int radius, 
 		args->src = src;
 		args->dst = dst;
 		args->rank = t;
-		args->num_threads = PTHREAD_COUNT;
+		args->num_threads = thread_count;
 		pthread_create(&threads[t], NULL, work, args);
 	}
 
-	for (int t = 0; t < PTHREAD_COUNT; ++t)
+	for (int t = 0; t < thread_count; ++t)
 		pthread_join(threads[t], NULL);
 
 	pthread_barrier_destroy(&barrier);
