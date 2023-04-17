@@ -11,6 +11,5 @@ typedef struct _pixel {
 	unsigned char r,g,b;
 } pixel;
 
-void thresfilter(const int xsize, const int ysize, pixel* src);
-
+void thresfilter(pixel* buf, int const count, int const N);
 #endif

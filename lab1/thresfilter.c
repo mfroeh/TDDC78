@@ -1,28 +1,28 @@
 #include "thresfilter.h"
-#define uint unsigned int 
+#include <mpi.h>
+#include "stdio.h"
 
-void thresfilter(const int xsize, const int ysize, pixel* src)
+// TODO: Remove all the prints
+void thresfilter(pixel *buf, int const count, int const N)
 {
-	uint sum, i, psum, nump;
-	nump = xsize * ysize;
-	
-	for (i = 0, sum = 0; i < nump; i++)
+	printf("%d, %d\n", count, N);
+	int sum = 0;
+	// Compute average over all pixels
+	for (int i = 0; i < count; ++i)
+		sum += (int)buf[i].r + (int)buf[i].g + (int)buf[i].b;
+	sum /= N;
+
+	int avg;
+	MPI_Allreduce(&sum, &avg, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+	printf("Hey, my local avg was %d and the received global avg is %d\n", sum, avg);
+
+	// Set values for all my pixels
+	for (int i = 0; i < count; ++i)
 	{
-		sum += (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
-	}
-	
-	sum /= nump;
-	
-	for (i = 0; i < nump; i++)
-	{
-		psum = (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
-		if (sum > psum)
-		{
-			src[i].r = src[i].g = src[i].b = 0;
-		}
+		int psum = (int)buf[i].r + (int)buf[i].g + (int)buf[i].b;
+		if (avg > psum)
+			buf[i].r = buf[i].g = buf[i].b = 0;
 		else
-		{
-			src[i].r = src[i].g = src[i].b = 255;
-		}
+			buf[i].r = buf[i].g = buf[i].b = 255;
 	}
 }
