@@ -6,18 +6,23 @@ x = [1, 2, 4, 8, 16, 32, 64]
 blur = [16.3786, 8.55247, 4.32111, 2.21067, 1.26054, 0.982082, 1.17529]
 threshold = [0.088511, 0.062794, 0.031244, 0.020858, 0.016567, 0.013478, 0.008912]
 
-# Plot
-fig, ax = plt.subplots()
-ax.plot(x, blur, label='Blur filter')
-ax.plot(x, threshold, label='Threshold filter')
+# Create figure and two subplots
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
 
-# Add labels and title
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_title('Blur and Threshold Filters')
+# Plot 1: Blur filter
+ax1.plot(x, blur)
+ax1.set_title('Blur Filter')
+ax1.set_xlabel('X')
+ax1.set_ylabel('Y')
 
-# Add legend
-ax.legend()
+# Plot 2: Threshold filter
+ax2.plot(x, threshold)
+ax2.set_title('Threshold Filter')
+ax2.set_xlabel('X')
+ax2.set_ylabel('Y')
+
+# Adjust spacing between subplots
+plt.subplots_adjust(hspace=0.5)
 
 # Show plot
 plt.show()
