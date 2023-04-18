@@ -76,16 +76,9 @@ int main(int argc, char **argv)
 		displs[i] = 3 * i * chunksize;
 	}
 
-	// TODO: Remove
-	printf("Hi im %d and I have sendcount %d (%d)\n", me, sendcounts[me], sendcounts[me] / 3);
-	printf("Hi im %d and I have offset %d (%d)\n", me, displs[me], displs[me] / 3);
-
 	// Distribute chunks of the image accross the processes
 	pixel *buf = malloc(sizeof(unsigned char) * sendcounts[me]);
 	status = MPI_Scatterv(src, sendcounts, displs, MPI_UNSIGNED_CHAR, buf, sendcounts[me], MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-
-	// TODO; Remove
-	assert_any_nonzero((unsigned char *)buf, sendcounts[me]);
 
 	// Apply the filter on our part of the image
 	thresfilter(buf, sendcounts[me] / 3, N);
@@ -93,8 +86,10 @@ int main(int argc, char **argv)
 	// Reassemble the image from the filtered parts
 	status = MPI_Gatherv(buf, sendcounts[me], MPI_UNSIGNED_CHAR, src, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
-	double end_time = MPI_Wtime();
-	printf("Process %d MPI code took %f\n", me, end_time - start_time);
+	if (me == 0) {
+		double end_time = MPI_Wtime();
+		printf("Process %d MPI code took %f\n", me, end_time - start_time);
+	}
 
 	MPI_Finalize();
 
