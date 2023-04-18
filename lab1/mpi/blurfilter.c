@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "blurfilter.h"
-#include "ppmio.h"
+#include "../ppmio.h"
 #include <pthread.h>
 
 pthread_barrier_t barrier;

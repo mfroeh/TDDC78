@@ -2,24 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "ppmio.h"
+#include "../ppmio.h"
 #include "thresfilter.h"
-#include <assert.h>
 #include <mpi.h>
-
-void assert_any_nonzero(unsigned char *buf, int count)
-{
-	int any = 0;
-	for (int i = 0; i < count; ++i)
-	{
-		if (buf[i] != 0)
-		{
-			any = 1;
-			break;
-		}
-	}
-	assert(any);
-}
 
 int main(int argc, char **argv)
 {

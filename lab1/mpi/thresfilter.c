@@ -1,6 +1,6 @@
 #include "thresfilter.h"
 #include <mpi.h>
-#include "stdio.h"
+#include <stdio.h>
 
 typedef unsigned int uint;
 

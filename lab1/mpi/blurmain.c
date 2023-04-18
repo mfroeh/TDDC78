@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "ppmio.h"
+#include "../ppmio.h"
 #include "blurfilter.h"
-#include "gaussw.h"
-#include "math.h"
+#include "../gaussw.h"
+#include <math.h>
 
 #define MAX_RAD 1000
 

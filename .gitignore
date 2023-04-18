@@ -1,2 +1,4 @@
-*.o
+**/*.o
 **/out/
+blurc_*
+thresc_*
