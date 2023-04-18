@@ -1,4 +1,4 @@
-CC = gcc
+CC = icc
 CFLAGS = -g
 LFLAGS = -lpthread -lrt -lm -g
 
