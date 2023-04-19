@@ -22,7 +22,7 @@ void *work(void *arg)
 	// Sum over all my pixels
 	uint local_sum = 0;
 	for (int i = args.begin; i < args.end; ++i)
-		local_sum += (uint)args.src[i].r + (uint)args.src[i].g + (uint)args.src[i].b;
+		local_sum += args.src[i].r + args.src[i].g + args.src[i].b;
 
 	pthread_mutex_lock(&sum_lock);
 	*args.sum += local_sum;
@@ -34,7 +34,7 @@ void *work(void *arg)
 	// Set values for all my pixels
 	for (int i = args.begin; i < args.end; ++i)
 	{
-		uint psum = (uint)args.src[i].r + (uint)args.src[i].g + (uint)args.src[i].b;
+		uint psum = args.src[i].r + args.src[i].g + args.src[i].b;
 		if (avg > psum)
 			args.src[i].r = args.src[i].g = args.src[i].b = 0;
 		else
