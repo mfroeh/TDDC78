@@ -11,7 +11,6 @@ int main(int argc, char **argv)
 	struct timespec stime, etime;
 	int xsize, ysize, N;
 	pixel *src = (pixel *)malloc(sizeof(pixel) * MAX_PIXELS);
-	printf("HI");
 
 	/* Take care of the arguments */
 	if (argc != 4)
@@ -19,7 +18,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Usage: %s threads infile outfile\n", argv[0]);
 		exit(1);
 	}
-	printf("HI");
 
 	int threads = atoi(argv[1]);
 	int exponent = log2f(threads);
@@ -28,7 +26,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Threads (%d) must be an element of the 2^n series and <= 64", threads);
 		exit(1);
 	}
-	printf("HI");
 
 	int colmax;
 	/* Read file */
@@ -42,7 +39,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	printf("HI");
 	clock_gettime(CLOCK_REALTIME, &stime);
 	thresfilter(xsize, ysize, src, threads);
 	clock_gettime(CLOCK_REALTIME, &etime);
