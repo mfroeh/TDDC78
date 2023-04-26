@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 		src = (pixel *)malloc(sizeof(pixel) * MAX_PIXELS);
 
 		/* Read file */
-		if (read_ppm(argv[3], &xsize, &ysize, &colmax, (char *)src) != 0)
+		if (read_ppm(argv[2], &xsize, &ysize, &colmax, (char *)src) != 0)
 			exit(1);
 
 		if (colmax > 255)
@@ -55,12 +55,13 @@ int main(int argc, char **argv)
 	/* filter */
 	get_gauss_weights(radius, w);
 
-	//Broadcast ysize and xsize to all processes
+	double start_time = MPI_Wtime();
 
+	//Broadcast ysize and xsize to all processes
 	MPI_Bcast(&ysize, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&xsize, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	printf("Scattering image by rows\n");
+	/* Row-wise Section */
 
 	int *sendcounts = (int *)malloc(p * sizeof(int));
 	int *displs = (int *)malloc(p * sizeof(int));
@@ -80,6 +81,7 @@ int main(int argc, char **argv)
 	MPI_Scatterv(src, sendcounts, displs, MPI_UNSIGNED_CHAR, buf, sendcounts[me], MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
 	pixel* dst = malloc(sizeof(unsigned char) * sendcounts[me]);
+	
 	int endRow = sendcounts[me] / (3*xsize);
 
 	// Compute the weighted row-wise averages for pixels of the assigned rows
@@ -89,17 +91,21 @@ int main(int argc, char **argv)
 	// Gather the results and scatter column-wise
 	MPI_Gatherv(dst, sendcounts[me], MPI_UNSIGNED_CHAR, src, sendcounts, displs, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
+	/* Column-wise Section */
+
+	//Custom data type creation for columns
 	MPI_Datatype col, col_type;
 
 	if (me == 0) {
 		MPI_Type_vector(ysize,    
 				3,                  
-				xsize,
+				xsize*3,
 				MPI_UNSIGNED_CHAR,       
 				&col);     
 
 		MPI_Type_commit(&col);
 		MPI_Type_create_resized(col, 0, 3*sizeof(unsigned char), &col_type);
+		MPI_Type_commit(&col_type);
 	}
 
 	int colsPerThread = xsize / p;
@@ -107,7 +113,7 @@ int main(int argc, char **argv)
 	// Compute the send counts and their offsets
 	for (int i = 0; i < p; ++i)
 	{
-		displs[i] = i;
+		displs[i] = i * colsPerThread;
 		if (i == p - 1)
 			colsPerThread += xsize % p;
 		sendcounts[i] = colsPerThread;
@@ -123,24 +129,27 @@ int main(int argc, char **argv)
 	free(dst);
 	dst = malloc(sizeof(unsigned char) * recvcount);
 
-	endRow = sendcounts[me];
+	int endColumn = sendcounts[me];
 
-	// Compute the weighted row-wise averages for pixels of the assigned rows
-	for (int y = 0; y < endRow; ++y)
-		compute_row(y, ysize, radius, w, buf, dst);
+	// Compute the weighted column-wise averages for pixels of the assigned columns (re-using the compute_row function)
+	for (int x = 0; x < endColumn; ++x)
+		compute_row(x, ysize, radius, w, buf, dst);
 
 	MPI_Gatherv(dst, recvcount, MPI_UNSIGNED_CHAR, src, sendcounts, displs, col_type, 0, MPI_COMM_WORLD);
 
-	//TODO: time measurements
+	if (me == 0) {
+		double end_time = MPI_Wtime();
+		printf("Process %d MPI code took %f\n", me, end_time - start_time);
+	}
 
-	free(dst);
-	free(buf);
+	MPI_Finalize();
 
 	if(me == 0) {
+
 		/* Write result */
 		printf("Writing output file\n");
 
-		if (write_ppm(argv[4], xsize, ysize, (char *)src) != 0)
+		if (write_ppm(argv[3], xsize, ysize, (char *)src) != 0)
 			exit(1);
 	}
 }

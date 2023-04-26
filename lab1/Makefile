@@ -16,7 +16,7 @@ thresc_pthreads: pthreads/thresmain.o ppmio.o pthreads/thresfilter.o
 	$(CC) -o $@ pthreads/thresmain.o ppmio.o pthreads/thresfilter.o $(LFLAGS)
 
 blurc_mpi: ppmio.o gaussw.o mpi/blurfilter.o mpi/blurmain.o
-	mpicc -o $@ ppmio.o gaussw.o mpi/blurfilter.o mpi/blurfilter.o -g -lrt -lm
+	mpicc -o $@ ppmio.o gaussw.o mpi/blurfilter.o mpi/blurmain.o -g -lrt -lm
 
 thresc_mpi: mpi/thresmain.o ppmio.o mpi/thresfilter.o
 	mpicc -o $@ mpi/thresmain.o ppmio.o mpi/thresfilter.o -g -lrt -lm
