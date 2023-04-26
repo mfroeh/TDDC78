@@ -11,4 +11,6 @@ typedef struct _pixel {
 	unsigned char r,g,b;
 } pixel;
 
+void compute_row(int y, int xsize, int radius, const double *weights, pixel* buf, pixel* dst);
+
 #endif

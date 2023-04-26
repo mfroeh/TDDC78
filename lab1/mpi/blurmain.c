@@ -6,6 +6,7 @@
 #include "blurfilter.h"
 #include "../gaussw.h"
 #include <math.h>
+#include <mpi.h>
 
 #define MAX_RAD 1000
 
@@ -98,7 +99,7 @@ int main(int argc, char **argv)
 				&col);     
 
 		MPI_Type_commit(&col);
-		MPI_Type_create_resized(col, 0, 3*sizeof(unsigned char),  col_type);
+		MPI_Type_create_resized(col, 0, 3*sizeof(unsigned char), &col_type);
 	}
 
 	int colsPerThread = xsize / p;
@@ -114,15 +115,15 @@ int main(int argc, char **argv)
 
 	int recvcount = sendcounts[me] * ysize * 3;
 
-	free(buff);
-	pixel *buf = malloc(sizeof(unsigned char) * recvcount);
+	free(buf);
+	buf = malloc(sizeof(unsigned char) * recvcount);
 
 	MPI_Scatterv(src, sendcounts, displs, col_type, buf, recvcount, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
 	free(dst);
-	pixel* dst = malloc(sizeof(unsigned char) * recvcount);
+	dst = malloc(sizeof(unsigned char) * recvcount);
 
-	int endRow = sendcounts[me];
+	endRow = sendcounts[me];
 
 	// Compute the weighted row-wise averages for pixels of the assigned rows
 	for (int y = 0; y < endRow; ++y)

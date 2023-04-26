@@ -35,7 +35,7 @@ void compute_row(int y, int xsize, int radius, const double *weights, pixel* buf
 
 void compute_col(int x, int xsize, int ysize, int radius, const double *weights, pixel* buf, pixel* dst)
 {
-	for (int y = 0; y < args->ysize; ++y)
+	for (int y = 0; y < ysize; ++y)
 	{
 
 		double r = 0, g = 0, b = 0, n = 0;
