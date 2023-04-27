@@ -137,10 +137,8 @@ int main(int argc, char **argv)
 
 	MPI_Gatherv(dst, recvcount, MPI_UNSIGNED_CHAR, src, sendcounts, displs, col_type, 0, MPI_COMM_WORLD);
 
-	if (me == 0) {
-		double end_time = MPI_Wtime();
-		printf("Process %d MPI code took %f\n", me, end_time - start_time);
-	}
+	double end_time = MPI_Wtime();
+	printf("Process %d MPI code took %f\n", me, end_time - start_time);
 
 	MPI_Finalize();
 
