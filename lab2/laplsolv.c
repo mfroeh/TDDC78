@@ -50,7 +50,7 @@ void arrcpy(double *dst, double *src, int len)
 void laplsolv(int n, int maxiter, double tol)
 {
 	double T[n + 2][n + 2];
-	double tmp1[n], tmp2[n], tmp3[n];
+	double tmp1[n], tmp2[n], tmp3[n], row_after_chunk[n];
 	int k;
 
 	struct timespec starttime, endtime;
@@ -74,53 +74,56 @@ void laplsolv(int n, int maxiter, double tol)
 	// Solve the linear system of equations using the Jacobi method
 	for (k = 0; k < maxiter; ++k)
 	{
-		double error = -INFINITY;
+		double global_error = -INFINITY;
 
-		// Loop for each of this thread's rows
-#pragma omp parallel private(tmp1, tmp2)
+#pragma omp parallel private(tmp1, tmp2, tmp3, row_after_chunk)
 		{
-
-			int p = omp_get_num_threads();
+			double error = -INFINITY;
 			int me = omp_get_thread_num();
-
+			int p = omp_get_num_threads();
 			int chunk_size = n / p;
 			int start = chunk_size * me + 1;
 			if (me == p - 1)
 				chunk_size += n % p;
-			int end = start + chunk_size + 1;
+			int end = start + chunk_size;
 
+			// The row above the current row
 			arrcpy(tmp1, &T[start - 1][1], n);
-
-			double row_after_chunk[n];
+			// The row just below our chunk of data
 			arrcpy(row_after_chunk, &T[end][1], n);
 
 #pragma omp barrier
 
-			for (int i = start; i < end; ++i)
+			// Compute [start, end-1) rows
+			int i = start;
+			for (i; i < end - 1; ++i)
 			{
 				arrcpy(tmp2, &T[i][1], n);
-				if (i == end - 1)
+				for (int j = 1; j <= n; ++j)
 				{
-					for (int j = 1; j <= n; ++j)
-					{
-						double previous_value = T[i][j];
-						T[i][j] = (T[i][j - 1] + T[i][j + 1] + row_after_chunk[j - 1] + tmp1[j - 1]) / 4.0;
-						error = fmax(error, fabs(previous_value - T[i][j]));
-					}
+					tmp3[j - 1] = (T[i][j - 1] + T[i][j + 1] + T[i + 1][j] + tmp1[j - 1]) / 4.0;
+					error = fmax(error, fabs(tmp2[j - 1] - tmp3[j - 1]));
 				}
-				else
-				{
-					for (int j = 1; j <= n; ++j)
-					{
-						double previous_value = T[i][j];
-						T[i][j] = (T[i][j - 1] + T[i][j + 1] + T[i + 1][j - 1] + tmp1[j - 1]) / 4.0;
-						error = fmax(error, fabs(previous_value - T[i][j]));
-					}
-				}
+				arrcpy(&T[i][1], tmp3, n);
 				arrcpy(tmp1, tmp2, n);
 			}
+
+			// Compute our last row
+			arrcpy(tmp2, &T[i][1], n);
+			for (int j = 1; j <= n; ++j)
+			{
+				tmp3[j - 1] = (T[i][j - 1] + T[i][j + 1] + row_after_chunk[j - 1] + tmp1[j - 1]) / 4.0;
+				error = fmax(error, fabs(tmp2[j - 1] - tmp3[j - 1]));
+			}
+			arrcpy(&T[i][1], tmp3, n);
+
+#pragma omp critical(name)
+			{
+				global_error = fmax(error, global_error);
+			}
 		}
-		if (error < tol)
+
+		if (global_error < tol)
 			break;
 	}
 
