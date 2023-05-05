@@ -27,7 +27,7 @@ ax2.set_ylabel('Execution Time (s)')
 ax2.legend()
 
 # plot for lapl_omp
-ax3.plot(x, lapl_omp, 'bo-', label='OpenMP')
+ax3.plot(x[:-1], lapl_omp, 'bo-', label='OpenMP')
 ax3.set_title('Laplacian Execution Time')
 ax3.set_xlabel('Threads')
 ax3.set_ylabel('Execution Time (s)')
