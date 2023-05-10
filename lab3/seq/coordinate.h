@@ -13,6 +13,7 @@ struct part_cord {
     float y ;
     float vx ;
     float vy ;
+    bool has_collided;
 } ;
 
 typedef struct cord cord_t ;
