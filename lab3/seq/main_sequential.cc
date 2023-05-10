@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <vector>
 #include <tuple>
+#include <iostream>
 
 #include "coordinate.h"
 #include "definitions.h"
@@ -19,23 +20,17 @@ float rand1()
 	return (float)(rand() / (float)RAND_MAX);
 }
 
-void init_collisions(bool *collisions, unsigned int max)
+void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second)
 {
-	for (unsigned int i = 0; i < max; ++i)
-		collisions[i] = 0;
-}
+	unsigned p, pp;
 
-void check(pcord_t *first, pcord_t *second, int first_count, int second_count)
-{
-	unsigned p,pp;
-
-	for (p = 0; p < first_count; p++)
+	for (p = 0; p < first.size(); p++)
 	{ // for all particles
 		if (first[p].has_collided)
 			continue;
 
 		/* check for collisions */
-		for (pp = p + 1; pp < second_count; pp++)
+		for (pp = p + 1; pp < second.size(); pp++)
 		{
 			if (second[pp].has_collided)
 				continue;
@@ -50,19 +45,25 @@ void check(pcord_t *first, pcord_t *second, int first_count, int second_count)
 	}
 }
 
-std::vector<std::pair<int,int>> get_neighbors(int row, int column) {
-	std::vector<std::pair<int,int>> result;
-	if(row == 0) {
-		result.push_back({row+1, column});
-	} else {
-		result.push_back({row-1, column});
+std::vector<std::pair<int, int>> get_neighbors(int row, int column)
+{
+	std::vector<std::pair<int, int>> result;
+	if (row == 0)
+	{
+		result.push_back({row + 1, column});
+	}
+	else
+	{
+		result.push_back({row - 1, column});
 	}
 
-	if(column > 0) {
-		result.push_back({row, column-1});
+	if (column > 0)
+	{
+		result.push_back({row, column - 1});
 	}
-	if(column < P-1) {
-		result.push_back({row, column+1});
+	if (column < P - 1)
+	{
+		result.push_back({row, column + 1});
 	}
 	return result;
 }
@@ -90,18 +91,17 @@ int main(int argc, char **argv)
 	wall.x1 = BOX_HORIZ_SIZE;
 	wall.y1 = BOX_VERT_SIZE;
 
-	pcord_t* particles[2][P];
-	int counts[2][P];
+	std::vector<pcord_t> particles[2][P];
+	std::vector<pcord_t> new_particles[2][P];
 
-	for(int i = 0; i < 2; i++) {
-		for(int j = 0; j < P; j++) {
-			particles[i][j] = (pcord_t*) malloc(INIT_NO_PARTICLES * sizeof(pcord_t));
-			counts[i][j] = 0;
+	for (int i = 0; i < 2; i++)
+	{
+		for (int j = 0; j < P; j++)
+		{
+			particles[i][j] = {};
+			new_particles[i][j] = {};
 		}
 	}
-
-	// 2. allocate particle bufer and initialize the particles
-	bool *collisions = (bool *)malloc(INIT_NO_PARTICLES * sizeof(bool));
 
 	srand(time(NULL) + 1234);
 
@@ -112,6 +112,7 @@ int main(int argc, char **argv)
 		pcord_t temp;
 		temp.x = wall.x0 + rand1() * BOX_HORIZ_SIZE;
 		temp.y = wall.y0 + rand1() * BOX_VERT_SIZE;
+		temp.has_collided = false;
 
 		// initialize random velocity
 		r = rand1() * MAX_INITIAL_VELOCITY;
@@ -119,10 +120,9 @@ int main(int argc, char **argv)
 		temp.vx = r * cos(a);
 		temp.vy = r * sin(a);
 
-		int row = (int)floor(temp.y / (BOX_VERT_SIZE/2));
-		int column = (int)floor(temp.x / (BOX_HORIZ_SIZE/P));
-		particles[row][column][counts[row][column]] = temp;
-		counts[row][column]++;
+		int row = (int)floor(temp.y / ((BOX_VERT_SIZE - 1) / 2));
+		int column = (int)floor(temp.x / ((BOX_HORIZ_SIZE - 1) / P));
+		particles[row][column].push_back(temp);
 	}
 
 	unsigned int p, pp;
@@ -131,14 +131,15 @@ int main(int argc, char **argv)
 	for (time_stamp = 0; time_stamp < time_max; time_stamp++)
 	{ // for each time stamp
 
-		init_collisions(collisions, INIT_NO_PARTICLES);
-
-		for (int row = 0; row < 2; row++) {
-			for(int column = 0; column < P; column++) {
-				check(particles[row][column], particles[row][column], counts[row][column], counts[row][column]);
+		for (int row = 0; row < 2; row++)
+		{
+			for (int column = 0; column < P; column++)
+			{
+				check(particles[row][column], particles[row][column]);
 				std::vector<std::pair<int, int>> neighbors = get_neighbors(row, column);
-				for(auto& neighbor : neighbors) {
-					check(particles[row][column], particles[neighbor.first][neighbor.second], counts[row][column], counts[neighbor.first][neighbor.second]);
+				for (auto &neighbor : neighbors)
+				{
+					check(particles[row][column], particles[neighbor.first][neighbor.second]);
 				}
 			}
 		}
@@ -147,21 +148,36 @@ int main(int argc, char **argv)
 		{
 			for (int column = 0; column < P; column++)
 			{
-				for(p = 0; p < counts[row][column]; p++) {
-					if(!particles[row][column][p].has_collided) {
-
+				for (p = 0; p < particles[row][column].size(); p++)
+				{
+					pcord_t* particle = &particles[row][column][p];
+					if (!particle->has_collided)
+					{
 						feuler(&particles[row][column][p], 1);
 						pressure += wall_collide(&particles[row][column][p], wall);
 					}
+					int new_row = (int)floor(particle->y / ((BOX_VERT_SIZE - 1) / 2));
+					int new_column = (int)floor(particle->x / ((BOX_HORIZ_SIZE - 1) / P));
+					particle->has_collided = false;
+					new_particles[new_row][new_column].push_back(*particle);
 				}
 			}
 		}
 
+		for (int row = 0; row < 2; row++)
+		{
+			for (int column = 0; column < P; column++)
+			{
+				particles[row][column].clear();
+				particles[row][column].insert(particles[row][column].end(), new_particles[row][column].begin(), new_particles[row][column].end());
+				new_particles[row][column].clear();
+			}
+		}
 	}
 
 	printf("Average pressure = %f\n", pressure / (WALL_LENGTH * time_max));
 
-	//free(particles);
+	// free(particles);
 
 	return 0;
 }
