@@ -1,6 +1,4 @@
-
-
-all:main.cc  physics.cc
+all: main.cc physics.cc
 	mpic++ -std=c++17 -g -o $@ $^ -lrt -lm
 
 clean:
