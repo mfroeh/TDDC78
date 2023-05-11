@@ -1,7 +1,10 @@
+all: ours given
 
-
-sequential:main_sequential.cc  physics.cc
+ours: main_ours.cc physics.cc
 	g++ -std=c++17 -g -o $@ $^ -lrt -lm
 
-allclean:
+given: main_given.cc physics.cc
+	g++ -std=c++17 -g -o $@ $^ -lrt -lm
+
+clean:
 	-rm *.o sequential
