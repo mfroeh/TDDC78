@@ -131,8 +131,8 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &me);
 	MPI_Comm_size(MPI_COMM_WORLD, &p);
 
-	int sendcounts[p]{};
-	int displs[p]{};
+	int sendcounts[p];
+	int displs[p];
 	std::vector<pcord_t> buffer{};
 	if (me == 0)
 	{
@@ -203,65 +203,74 @@ int main(int argc, char **argv)
 		check(B, B, collided_self);
 		check(A, B, collided_self);
 
-		// First one only receives
-		if (me == 0)
+		// Don't have to communicate if single process
+		if (p != 1)
 		{
-			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me + 1, 0, MPI_COMM_WORLD, &status);
-			C.resize(recv_count);
-			MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
-			check(B, C, collided_self);
+			// First one only receives
+			if (me == 0)
+			{
+				MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me + 1, 0, MPI_COMM_WORLD, &status);
+				C.resize(recv_count);
+				MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
+				check(B, C, collided_self);
 
-			check_wall(A, wall, pressure, collided);
-			check_wall(B, wall, pressure, collided);
-			check_wall(C, wall, pressure, collided);
+				check_wall(A, wall, pressure, collided);
+				check_wall(B, wall, pressure, collided);
+				check_wall(C, wall, pressure, collided);
 
-			move_particles(B, C, upper);
+				move_particles(B, C, upper);
 
-			send_count = C.size();
-			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
-			MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
+				send_count = C.size();
+				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
+				MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
+			}
+			// Last one only sends
+			else if (me == p - 1)
+			{
+				send_count = A.size();
+				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
+				MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
+
+				check_wall(B, wall, pressure, collided);
+
+				MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
+				A.resize(recv_count);
+				MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
+			}
+			// Everyone else sends and receives
+			else
+			{
+				// Send
+				send_count = A.size();
+				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
+				MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
+				std::cout << me << ": Sent out: " << send_count << std::endl;
+
+				// Receive
+				MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me + 1, 0, MPI_COMM_WORLD, &status);
+				C.resize(recv_count);
+				MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
+
+				std::cout << me << ": Received: " << recv_count << std::endl;
+				check(B, C, collided_self);
+
+				check_wall(B, wall, pressure, collided);
+				check_wall(C, wall, pressure, collided);
+
+				move_particles(B, C, upper);
+
+				send_count = C.size();
+				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
+				MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
+				MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
+				A.resize(recv_count);
+				MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
+			}
 		}
-		// Last one only sends
-		else if (me == p - 1)
-		{
-			send_count = A.size();
-			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
-			MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
-
-			check_wall(B, wall, pressure, collided);
-
-			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
-			A.resize(recv_count);
-			MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
-		}
-		// Everyone else sends and receives
 		else
 		{
-			// Send
-			send_count = A.size();
-			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
-			MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
-			std::cout << me << ": Sent out: " << send_count << std::endl;
-
-			// Receive
-			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me + 1, 0, MPI_COMM_WORLD, &status);
-			C.resize(recv_count);
-			MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
-
-			std::cout << me << ": Received: " << recv_count << std::endl;
-			check(B, C, collided_self);
-
+			check_wall(A, wall, pressure, collided);
 			check_wall(B, wall, pressure, collided);
-			check_wall(C, wall, pressure, collided);
-
-			move_particles(B, C, upper);
-
-			send_count = C.size();
-			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
-			MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
-			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
-			A.resize(recv_count);
-			MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
 		}
 
 		move_particles(A, B, boundary);
