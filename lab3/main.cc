@@ -170,18 +170,18 @@ int main(int argc, char **argv)
 		// Last one only sends
 		else if (me == p - 1)
 		{
-			send_count = B.size();
+			send_count = A.size();
 			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
-			MPI_Isend(B.data(), B.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
+			MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
 			// TODO:
 		}
 		// Everyone else sends and receives
 		else
 		{
 			// Send
-			send_count = B.size();
+			send_count = A.size();
 			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
-			MPI_Isend(B.data(), B.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
+			MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
 			std::cout << me << ": Sent out: " << send_count << std::endl;
 
 			// Receive
@@ -191,8 +191,13 @@ int main(int argc, char **argv)
 
 			std::cout << me << ": Received: " << recv_count << std::endl;
 			check(B, C);
+
+			MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
+			MPI_Recv(A.data(), A.size(), pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
 			// TODO:
 		}
+
+		MPI_Barrier(MPI_COMM_WORLD);
 
 		// Check which particles collided in BC
 		// Check which particles should move for
