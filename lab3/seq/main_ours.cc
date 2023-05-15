@@ -55,9 +55,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	struct timespec stime, etime;
-	clock_gettime(CLOCK_REALTIME, &stime);
-
 	time_max = atoi(argv[1]);
 
 	/* Initialize */

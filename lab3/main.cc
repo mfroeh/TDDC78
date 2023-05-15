@@ -105,8 +105,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	double start_time{MPI_Wtime()};
-
 	time_max = atoi(argv[1]);
 
 	/* Initialize */
@@ -272,9 +270,6 @@ int main(int argc, char **argv)
 	printf("Time taken: %f\n", end_time - start_time);
 
 	MPI_Finalize();
-
-	double end_time{MPI_Wtime()};
-	printf("Time taken: %f\n", end_time - start_time);
 
 	if (me == 0)
 		printf("Average pressure = %f\n", total_pressure / (WALL_LENGTH * time_max));
