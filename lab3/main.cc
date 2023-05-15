@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <mpi.h>
 #include <vector>
+#include <algorithm>
+#include <iostream>
 
 #include "coordinate.h"
 #include "definitions.h"
@@ -40,6 +42,44 @@ void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second)
 		}
 	}
 }
+
+void check_wall(std::vector<pcord_t> &particles, cord_t const& wall, float &pressure, int &collided)
+{
+	for (size_t p = 0; p < particles.size(); ++p)
+	{
+		auto &particle = particles[p];
+		if (!particle.has_collided)
+		{
+			feuler(&particles[p], 1);
+			pressure += wall_collide(&particles[p], wall);
+		}
+		else
+		{
+			collided++;
+		}
+	}
+}
+
+void move_particles(std::vector<pcord_t> &first, std::vector<pcord_t> &second, float boundary )
+{
+
+	first.erase(std::remove_if(first.begin(), first.end(), [&second, boundary](pcord_t const &p)
+							   { 
+			if(p.x >= boundary) {
+				second.push_back(p);
+			}
+			return p.x >= boundary; }),
+				first.end());
+
+	second.erase(std::remove_if(second.begin(), second.end(), [&first, boundary](pcord_t const &p)
+							   { 
+			if(p.x < boundary) {
+				first.push_back(p);
+			}
+			return p.x < boundary; }),
+				second.end());
+}
+
 pcord_t get_random_particle(cord_t wall)
 {
 	float r, a;
@@ -62,7 +102,6 @@ pcord_t get_random_particle(cord_t wall)
 int main(int argc, char **argv)
 {
 	unsigned int time_stamp = 0, time_max;
-	float pressure = 0;
 
 	// parse arguments
 	if (argc != 2)
@@ -144,6 +183,8 @@ int main(int argc, char **argv)
 
 	unsigned recv_count, send_count;
 	std::vector<pcord_t> C{};
+	float pressure{0};
+	int collided{0};
 	/* Main loop */
 	for (time_stamp = 0; time_stamp < time_max; ++time_stamp)
 	{
@@ -165,7 +206,16 @@ int main(int argc, char **argv)
 			C.reserve(recv_count);
 			MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
 			check(B, C);
-			// TODO:
+
+			check_wall(A, wall, pressure, collided);
+			check_wall(B, wall, pressure, collided);
+			check_wall(C, wall, pressure, collided);
+
+			move_particles(B, C, upper);
+
+			send_count = C.size();
+			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
+			MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
 		}
 		// Last one only sends
 		else if (me == p - 1)
@@ -173,7 +223,12 @@ int main(int argc, char **argv)
 			send_count = A.size();
 			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
 			MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
-			// TODO:
+
+			check_wall(B, wall, pressure, collided);
+
+			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
+			A.reserve(recv_count);
+			MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
 		}
 		// Everyone else sends and receives
 		else
@@ -192,20 +247,28 @@ int main(int argc, char **argv)
 			std::cout << me << ": Received: " << recv_count << std::endl;
 			check(B, C);
 
+			check_wall(B, wall, pressure, collided);
+			check_wall(C, wall, pressure, collided);
+
+			move_particles(B, C, upper);
+
+			send_count = C.size();
+			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
 			MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
-			MPI_Recv(A.data(), A.size(), pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
-			// TODO:
+			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
+			A.reserve(recv_count);
+			MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
 		}
 
-		MPI_Barrier(MPI_COMM_WORLD);
+		move_particles(A, B, boundary);
 
-		// Check which particles collided in BC
-		// Check which particles should move for
-		// A -> B, B -> A, B -> C, C -> B
-		// TODO: And more ...
+		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
-	printf("Average pressure = %f\n", pressure / (WALL_LENGTH * time_max));
+	float total_pressure{};
+	MPI_Reduce(&pressure, &total_pressure, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+	printf("Average pressure = %f\n", total_pressure / (WALL_LENGTH * time_max));
 
 	MPI_Finalize();
 
