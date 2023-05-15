@@ -19,7 +19,7 @@ float rand1()
 	return (float)(rand() / (float)RAND_MAX);
 }
 
-void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second)
+void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second, int &collided_self)
 {
 	for (size_t p = 0; p < first.size(); p++)
 	{
@@ -35,6 +35,7 @@ void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second)
 			float t = collide(&first[p], &second[pp]);
 			if (t != -1)
 			{
+				collided_self++;
 				first[p].has_collided = second[pp].has_collided = true;
 				interact(&first[p], &second[pp], t);
 				break; // only check collision of two particles
@@ -43,7 +44,7 @@ void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second)
 	}
 }
 
-void check_wall(std::vector<pcord_t> &particles, cord_t const& wall, float &pressure, int &collided)
+void check_wall(std::vector<pcord_t> &particles, cord_t const &wall, float &pressure, int &collided)
 {
 	for (size_t p = 0; p < particles.size(); ++p)
 	{
@@ -60,7 +61,7 @@ void check_wall(std::vector<pcord_t> &particles, cord_t const& wall, float &pres
 	}
 }
 
-void move_particles(std::vector<pcord_t> &first, std::vector<pcord_t> &second, float boundary )
+void move_particles(std::vector<pcord_t> &first, std::vector<pcord_t> &second, float boundary)
 {
 
 	first.erase(std::remove_if(first.begin(), first.end(), [&second, boundary](pcord_t const &p)
@@ -72,12 +73,12 @@ void move_particles(std::vector<pcord_t> &first, std::vector<pcord_t> &second, f
 				first.end());
 
 	second.erase(std::remove_if(second.begin(), second.end(), [&first, boundary](pcord_t const &p)
-							   { 
+								{ 
 			if(p.x < boundary) {
 				first.push_back(p);
 			}
 			return p.x < boundary; }),
-				second.end());
+				 second.end());
 }
 
 pcord_t get_random_particle(cord_t wall)
@@ -184,28 +185,31 @@ int main(int argc, char **argv)
 	unsigned recv_count, send_count;
 	std::vector<pcord_t> C{};
 	float pressure{0};
-	int collided{0};
+	int collided{0}, collided_self{0};
 	/* Main loop */
 	for (time_stamp = 0; time_stamp < time_max; ++time_stamp)
 	{
+		collided = collided_self = 0;
 		for (auto &p : A)
 			p.has_collided = false;
 		for (auto &p : B)
 			p.has_collided = false;
 		C.clear();
 
+		std::cout << "Process " << me << ": [" << A.size() << " , " << B.size() << "]" << std::endl;
+
 		// Check AA, BB, AB
-		check(A, A);
-		check(B, B);
-		check(A, B);
+		check(A, A, collided_self);
+		check(B, B, collided_self);
+		check(A, B, collided_self);
 
 		// First one only receives
 		if (me == 0)
 		{
 			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me + 1, 0, MPI_COMM_WORLD, &status);
-			C.reserve(recv_count);
+			C.resize(recv_count);
 			MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
-			check(B, C);
+			check(B, C, collided_self);
 
 			check_wall(A, wall, pressure, collided);
 			check_wall(B, wall, pressure, collided);
@@ -227,7 +231,7 @@ int main(int argc, char **argv)
 			check_wall(B, wall, pressure, collided);
 
 			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
-			A.reserve(recv_count);
+			A.resize(recv_count);
 			MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
 		}
 		// Everyone else sends and receives
@@ -241,11 +245,11 @@ int main(int argc, char **argv)
 
 			// Receive
 			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me + 1, 0, MPI_COMM_WORLD, &status);
-			C.reserve(recv_count);
+			C.resize(recv_count);
 			MPI_Recv(C.data(), recv_count, pcord_mpi, me + 1, 1, MPI_COMM_WORLD, &status);
 
 			std::cout << me << ": Received: " << recv_count << std::endl;
-			check(B, C);
+			check(B, C, collided_self);
 
 			check_wall(B, wall, pressure, collided);
 			check_wall(C, wall, pressure, collided);
@@ -256,21 +260,23 @@ int main(int argc, char **argv)
 			MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
 			MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
 			MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
-			A.reserve(recv_count);
+			A.resize(recv_count);
 			MPI_Recv(A.data(), recv_count, pcord_mpi, me - 1, 2, MPI_COMM_WORLD, &status);
 		}
 
 		move_particles(A, B, boundary);
+
+		std::cout << "Process " << me << " had " << collided << " collisions and " << collided_self << " self-collisions" << std::endl;
 
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
 	float total_pressure{};
 	MPI_Reduce(&pressure, &total_pressure, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-	printf("Average pressure = %f\n", total_pressure / (WALL_LENGTH * time_max));
-
 	MPI_Finalize();
+
+	if (me == 0)
+		printf("Average pressure = %f\n", total_pressure / (WALL_LENGTH * time_max));
 
 	return 0;
 }
