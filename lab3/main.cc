@@ -124,6 +124,8 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &me);
 	MPI_Comm_size(MPI_COMM_WORLD, &p);
 
+	double start_time{MPI_Wtime()};
+
 	int sendcounts[p];
 	int displs[p];
 	std::vector<pcord_t> buffer{};
@@ -263,6 +265,10 @@ int main(int argc, char **argv)
 
 	float total_pressure{};
 	MPI_Reduce(&pressure, &total_pressure, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+	double end_time{MPI_Wtime()};
+	printf("Time taken: %f\n", end_time - start_time);
+
 	MPI_Finalize();
 
 	if (me == 0)

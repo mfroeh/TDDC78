@@ -4,8 +4,6 @@
 #include <math.h>
 #include <stdbool.h>
 #include <vector>
-#include <tuple>
-#include <iostream>
 
 #include "coordinate.h"
 #include "definitions.h"
@@ -46,7 +44,6 @@ void check(std::vector<pcord_t> &first, std::vector<pcord_t> &second)
 
 int main(int argc, char **argv)
 {
-
 	unsigned int time_stamp = 0, time_max;
 	float pressure = 0;
 
@@ -66,6 +63,9 @@ int main(int argc, char **argv)
 	wall.y0 = wall.x0 = 0;
 	wall.x1 = BOX_HORIZ_SIZE;
 	wall.y1 = BOX_VERT_SIZE;
+
+	struct timespec stime, etime;
+	clock_gettime(CLOCK_REALTIME, &stime);
 
 	std::vector<pcord_t> particles[2 * P]{};
 	std::vector<pcord_t> new_particles[2 * P]{};
@@ -108,7 +108,6 @@ int main(int argc, char **argv)
 				check(particles[box + 1], particles[box + 2]);
 		}
 
-		size_t collided{};
 		for (size_t box = 0; box < 2 * P; ++box)
 		{
 			for (size_t p = 0; p < particles[box].size(); ++p)
@@ -119,10 +118,6 @@ int main(int argc, char **argv)
 					feuler(&particles[box][p], 1);
 					pressure += wall_collide(&particles[box][p], wall);
 				}
-				else
-				{
-					collided++;
-				}
 
 				size_t new_box{static_cast<size_t>(floor(particle.x / ((BOX_HORIZ_SIZE + 1) / (2 * P))))};
 				particle.has_collided = false;
@@ -130,24 +125,16 @@ int main(int argc, char **argv)
 			}
 		}
 
-		std::cout << "Colissions: " << collided << std::endl;
-		std::cout << "[";
-		for (auto &boxes : particles)
-			std::cout << boxes.size() << ", ";
-		std::cout << "]" << std::endl;
-
 		for (size_t box = 0; box < 2 * P; ++box)
 		{
 			particles[box].clear();
 			particles[box].insert(particles[box].begin(), new_particles[box].begin(), new_particles[box].end());
 			new_particles[box].clear();
 		}
-
-		std::cout << "[";
-		for (auto &boxes : particles)
-			std::cout << boxes.size() << ", ";
-		std::cout << "]" << std::endl;
 	}
+
+	clock_gettime(CLOCK_REALTIME, &etime);
+	printf("Time taken: %f\n", (etime.tv_sec - stime.tv_sec) + 1e-9 * (etime.tv_nsec - stime.tv_nsec));
 
 	printf("Average pressure = %f\n", pressure / (WALL_LENGTH * time_max));
 
