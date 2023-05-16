@@ -277,7 +277,7 @@ int main(int argc, char **argv)
 
 	double end_time{MPI_Wtime()};
 	printf("Time taken: %f\n", end_time - start_time);
-	std::ofstream of{std::to_string(me)};
+	std::ofstream of{"sendcounts/" + std::to_string(me)};
 	std::copy(send_counter.begin(), send_counter.end(), std::ostream_iterator<int>(of, ","));
 
 	MPI_Finalize();
