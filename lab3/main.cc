@@ -6,6 +6,9 @@
 #include <mpi.h>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <fstream>
 
 #include "coordinate.h"
 #include "definitions.h"
@@ -178,6 +181,8 @@ int main(int argc, char **argv)
 	std::vector<pcord_t> C{};
 	float pressure{0};
 	/* Main loop */
+	std::vector<int> send_counter(time_max);
+	
 	for (time_stamp = 0; time_stamp < time_max; ++time_stamp)
 	{
 		for (auto &p : A)
@@ -208,6 +213,7 @@ int main(int argc, char **argv)
 				move_particles(B, C, upper);
 
 				send_count = C.size();
+				send_counter[time_stamp] = send_count;
 				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
 				MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
 			}
@@ -215,6 +221,7 @@ int main(int argc, char **argv)
 			else if (me == p - 1)
 			{
 				send_count = A.size();
+				send_counter[time_stamp] = send_count;
 				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
 				MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
 
@@ -229,6 +236,7 @@ int main(int argc, char **argv)
 			{
 				// Send
 				send_count = A.size();
+				send_counter[time_stamp] += send_count;
 				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me - 1, 0, MPI_COMM_WORLD, &request);
 				MPI_Isend(A.data(), A.size(), pcord_mpi, me - 1, 1, MPI_COMM_WORLD, &request);
 
@@ -245,6 +253,7 @@ int main(int argc, char **argv)
 				move_particles(B, C, upper);
 
 				send_count = C.size();
+				send_counter[time_stamp] += send_count;
 				MPI_Isend(&send_count, 1, MPI_UNSIGNED, me + 1, 3, MPI_COMM_WORLD, &request);
 				MPI_Isend(C.data(), C.size(), pcord_mpi, me + 1, 2, MPI_COMM_WORLD, &request);
 				MPI_Recv(&recv_count, 1, MPI_UNSIGNED, me - 1, 3, MPI_COMM_WORLD, &status);
@@ -268,6 +277,8 @@ int main(int argc, char **argv)
 
 	double end_time{MPI_Wtime()};
 	printf("Time taken: %f\n", end_time - start_time);
+	std::ofstream of{std::to_string(me)};
+	std::copy(send_counter.begin(), send_counter.end(), std::ostream_iterator<int>(of, ","));
 
 	MPI_Finalize();
 

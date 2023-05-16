@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 				collided++;
 			}
 		}
-		std::cout << "Colissions: " << collided << std::endl;
+		//std::cout << "Colissions: " << collided << std::endl;
 	}
 
 	printf("Average pressure = %f\n", pressure / (WALL_LENGTH * time_max));
